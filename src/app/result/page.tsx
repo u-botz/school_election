@@ -81,6 +81,17 @@ export default function ResultPage() {
     <div className="min-h-screen bg-gradient-to-br from-green-900 via-green-800 to-green-900 flex flex-col items-center justify-center py-14 px-6 relative overflow-hidden">
       <Confetti />
 
+      {/* Admin close button */}
+      <a
+        href="/admin/results"
+        className="fixed top-4 right-4 z-50 flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-medium rounded-lg border border-white/20 transition-colors"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+        Close
+      </a>
+
       {/* Heading */}
       <div className="relative z-10 text-center mb-12">
         <p className="text-green-300 text-xs font-semibold uppercase tracking-widest mb-3">
