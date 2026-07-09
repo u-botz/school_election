@@ -6,10 +6,6 @@ import { playSuccessBeep } from '@/lib/sound';
 
 type Stage = 'session-pick' | 'voting' | 'loading' | 'success' | 'error';
 
-// ─────────────────────────────────────────────────────────────────
-// Page — state machine
-// ─────────────────────────────────────────────────────────────────
-
 export default function BoothPage() {
   const [stage, setStage] = useState<Stage>('session-pick');
   const [session, setSession] = useState<Session | null>(null);
@@ -18,6 +14,7 @@ export default function BoothPage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [pendingCandidate, setPendingCandidate] = useState<Candidate | null>(null);
   const [voteError, setVoteError] = useState<string | null>(null);
+  const [voteCount, setVoteCount] = useState(0);
 
   const loadCandidates = useCallback(async (sess: Session) => {
     setLoadingCandidates(true);
@@ -28,10 +25,7 @@ export default function BoothPage() {
       .eq('session', sess)
       .order('name');
     setLoadingCandidates(false);
-    if (error) {
-      setFetchError(error.message);
-      return;
-    }
+    if (error) { setFetchError(error.message); return; }
     setCandidates(data ?? []);
   }, []);
 
@@ -43,45 +37,41 @@ export default function BoothPage() {
     void loadCandidates(sess);
   };
 
-  const changeSession = () => {
-    setSession(null);
-    setCandidates([]);
-    setFetchError(null);
-    setVoteError(null);
-    setPendingCandidate(null);
-    setStage('session-pick');
-  };
-
   const castVote = useCallback(
     async (candidate: Candidate) => {
       setStage('loading');
       setPendingCandidate(candidate);
       setVoteError(null);
-
       try {
         const [result] = await Promise.all([
           supabase.rpc('increment_vote', { candidate_id: candidate.id }),
           new Promise<void>((resolve) => setTimeout(resolve, 3000)),
         ]);
-
         if (result.error) throw new Error(result.error.message);
-
         playSuccessBeep();
+        setVoteCount((n) => n + 1);
         setStage('success');
-
         setTimeout(async () => {
           await loadCandidates(session!);
           setStage('voting');
         }, 2000);
       } catch (err) {
-        setVoteError(
-          err instanceof Error ? err.message : 'An unknown error occurred.'
-        );
+        setVoteError(err instanceof Error ? err.message : 'An unknown error occurred.');
         setStage('error');
       }
     },
     [session, loadCandidates]
   );
+
+  const castNota = useCallback(() => {
+    setStage('loading');
+    setTimeout(() => {
+      playSuccessBeep();
+      setVoteCount((n) => n + 1);
+      setStage('success');
+      setTimeout(() => setStage('voting'), 2000);
+    }, 1500);
+  }, []);
 
   if (stage === 'session-pick') return <SessionPicker onSelect={selectSession} />;
   if (stage === 'loading') return <LoadingOverlay />;
@@ -102,8 +92,9 @@ export default function BoothPage() {
       candidates={candidates}
       loading={loadingCandidates}
       fetchError={fetchError}
+      voteCount={voteCount}
       onVote={castVote}
-      onChangeSession={changeSession}
+      onNota={castNota}
       onRetryFetch={() => void loadCandidates(session!)}
     />
   );
@@ -126,7 +117,6 @@ function SessionPicker({ onSelect }: { onSelect: (s: Session) => void }) {
         <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">School Election</h1>
         <p className="mt-2 text-gray-500 text-lg">Select your class section to begin</p>
       </div>
-
       <div className="flex flex-col sm:flex-row gap-6 w-full max-w-md">
         {([['lp', 'Lower Primary'], ['up', 'Upper Primary']] as [Session, string][]).map(
           ([sess, label]) => (
@@ -146,7 +136,7 @@ function SessionPicker({ onSelect }: { onSelect: (s: Session) => void }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Voting Screen
+// EVM Voting Screen
 // ─────────────────────────────────────────────────────────────────
 
 function VotingScreen({
@@ -154,109 +144,190 @@ function VotingScreen({
   candidates,
   loading,
   fetchError,
+  voteCount,
   onVote,
-  onChangeSession,
+  onNota,
   onRetryFetch,
 }: {
   session: Session;
   candidates: Candidate[];
   loading: boolean;
   fetchError: string | null;
+  voteCount: number;
   onVote: (c: Candidate) => void;
-  onChangeSession: () => void;
+  onNota: () => void;
   onRetryFetch: () => void;
 }) {
   const title = session === 'lp' ? 'Lower Primary Election' : 'Upper Primary Election';
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="bg-green-700 text-white px-5 py-4 flex items-center justify-between shadow-md sticky top-0 z-10">
-        <div>
-          <h1 className="text-lg font-bold">{title}</h1>
-          <p className="text-green-200 text-xs">Tap a candidate card to cast your vote</p>
-        </div>
-        <button
-          onClick={onChangeSession}
-          className="shrink-0 ml-4 text-sm border border-white/50 rounded-lg px-3 py-1.5 hover:bg-white/10 transition-colors cursor-pointer"
-        >
-          Change Session
-        </button>
-      </header>
+    <div className="min-h-screen bg-gray-300 flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-lg">
+        {/* Machine outer frame */}
+        <div className="bg-[#2a2f3b] rounded-2xl p-1">
+          <div className="rounded-xl overflow-hidden border border-[#3a4050]">
 
-      <main className="flex-1 p-4 md:p-8">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center h-64 gap-4">
-            <Spinner className="w-10 h-10 border-4 border-green-700/20 border-t-green-700" />
-            <p className="text-gray-400 text-sm">Loading candidates…</p>
+            {/* EVM Header */}
+            <div className="bg-[#1a3a6b] px-4 py-3 flex items-center gap-3 border-b-2 border-[#0f2a52]">
+              <div className="w-7 h-7 rounded-full bg-yellow-400 flex items-center justify-center shrink-0">
+                <svg className="w-4 h-4 text-[#1a3a6b]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-[#e8f0ff] text-xs font-medium tracking-widest uppercase">{title}</p>
+                <p className="text-[#7a9fd4] text-[10px] mt-0.5">School Election · Ballot Unit</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-[#7a9fd4] text-[10px]">EVM</p>
+                <p className="text-green-400 text-[10px]">● READY</p>
+              </div>
+            </div>
+
+            {/* Instruction strip */}
+            <div className="bg-[#e8e2d4] px-4 py-1.5 text-[10px] text-[#5a5040] text-center tracking-wide border-b border-[#ccc6b4]">
+              Press the blue button next to your candidate to cast your vote
+            </div>
+
+            {/* Body */}
+            <div className="bg-[#f5f0e8]">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-4">
+                  <Spinner className="w-8 h-8 border-4 border-[#cfc9ba] border-t-[#2a2f3b]" />
+                  <p className="text-[#8a7a60] text-sm">Loading candidates…</p>
+                </div>
+              ) : fetchError ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3 text-center px-4">
+                  <p className="text-red-600 font-medium text-sm">Failed to load candidates</p>
+                  <p className="text-[#8a7a60] text-xs max-w-xs">{fetchError}</p>
+                  <button
+                    onClick={onRetryFetch}
+                    className="px-4 py-1.5 bg-[#1a4fa8] text-white rounded-lg text-xs hover:bg-[#2060c0] transition-colors cursor-pointer"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : candidates.length === 0 ? (
+                <div className="flex items-center justify-center py-16">
+                  <p className="text-[#8a7a60] text-sm">No candidates registered for this session.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Column labels */}
+                  <div className="flex items-center px-3 py-1 gap-2.5 border-b border-[#cfc9ba] bg-[#ede8da]">
+                    <div className="w-5 shrink-0" />
+                    <div className="w-11 shrink-0 text-[9px] text-[#8a7a60] text-center">Photo</div>
+                    <div className="flex-1 text-[9px] text-[#8a7a60]">Candidate</div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="w-9 text-[9px] text-[#8a7a60] text-center">Symbol</div>
+                      <div className="w-2" />
+                      <div className="w-14" />
+                    </div>
+                  </div>
+
+                  {/* Candidate rows */}
+                  {candidates.map((c, i) => (
+                    <EVMRow key={c.id} candidate={c} index={i} onVote={onVote} />
+                  ))}
+
+                  {/* NOTA row */}
+                  <div className="flex items-center px-3 py-2 gap-2.5 border-t-2 border-[#b0a890] bg-[#ede8da]">
+                    <div className="w-5 h-5 rounded-full bg-[#7f1d1d] text-[10px] font-medium flex items-center justify-center shrink-0 text-red-200">
+                      N
+                    </div>
+                    <div className="w-11 h-11 rounded-md border border-[#ccc6b4] bg-white flex items-center justify-center shrink-0">
+                      <svg className="w-5 h-5 text-[#8a7a60]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                          d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 text-xs font-medium text-[#5a5040]">
+                      NOTA — None of the above
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="w-9 h-9 shrink-0" />
+                      <div className="w-2 h-2 rounded-full bg-gray-400 border border-gray-500 shrink-0" />
+                      <button
+                        onClick={onNota}
+                        className="w-14 h-6 rounded-full bg-[#1a4fa8] text-white text-[10px] font-medium tracking-wide hover:bg-[#2060c0] active:bg-[#0f3070] active:translate-y-px transition-all cursor-pointer shrink-0"
+                      >
+                        VOTE
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="bg-[#2a2f3b] px-4 py-2 flex items-center justify-between">
+              <span className="text-[#7a8090] text-[10px]">Total votes cast</span>
+              <span className="text-[#c8d0e0] text-xs font-medium">{voteCount}</span>
+            </div>
+
           </div>
-        ) : fetchError ? (
-          <div className="flex flex-col items-center justify-center h-64 gap-4 text-center">
-            <p className="text-red-500 font-medium">Failed to load candidates</p>
-            <p className="text-gray-400 text-sm max-w-xs">{fetchError}</p>
-            <button
-              onClick={onRetryFetch}
-              className="px-5 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 transition-colors text-sm cursor-pointer"
-            >
-              Retry
-            </button>
-          </div>
-        ) : candidates.length === 0 ? (
-          <div className="flex items-center justify-center h-64">
-            <p className="text-gray-400">No candidates registered for this session.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-            {candidates.map((c) => (
-              <CandidateCard key={c.id} candidate={c} onVote={onVote} />
-            ))}
-          </div>
-        )}
-      </main>
+        </div>
+      </div>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Candidate Card
+// EVM Row — one candidate
 // ─────────────────────────────────────────────────────────────────
 
-function CandidateCard({
+function EVMRow({
   candidate,
+  index,
   onVote,
 }: {
   candidate: Candidate;
+  index: number;
   onVote: (c: Candidate) => void;
 }) {
   return (
-    <button
-      onClick={() => onVote(candidate)}
-      className="w-full flex flex-col items-center gap-3 bg-white rounded-2xl shadow hover:shadow-xl active:scale-95 transition-all duration-150 cursor-pointer border-2 border-transparent hover:border-green-700 p-4"
-    >
-      <div className="w-full aspect-square rounded-xl overflow-hidden bg-gray-100">
-        {candidate.photo_url ? (
-          <CandidatePhoto src={candidate.photo_url} name={candidate.name} />
-        ) : (
-          <AvatarPlaceholder name={candidate.name} />
-        )}
+    <div className="flex items-center px-3 py-2 gap-2.5 border-b border-[#cfc9ba] bg-[#f5f0e8]">
+      {/* Serial number */}
+      <div className="w-5 h-5 rounded-full bg-[#2a2f3b] text-[#e8f0ff] text-[10px] font-medium flex items-center justify-center shrink-0">
+        {index + 1}
       </div>
 
-      <p className="font-bold text-gray-900 text-center text-sm leading-snug w-full line-clamp-2">
+      {/* Student photo */}
+      <div className="w-11 h-11 rounded-md overflow-hidden border border-[#bbb] shrink-0">
+        {candidate.photo_url
+          ? <CandidatePhoto src={candidate.photo_url} name={candidate.name} />
+          : <AvatarPlaceholder name={candidate.name} />
+        }
+      </div>
+
+      {/* Name */}
+      <div className="flex-1 text-sm font-medium text-gray-900 min-w-0 truncate">
         {candidate.name}
-      </p>
-
-      <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-50 border border-gray-200 shrink-0">
-        {candidate.symbol_url ? (
-          <SymbolImage src={candidate.symbol_url} name={candidate.name} />
-        ) : (
-          <SymbolPlaceholder />
-        )}
       </div>
-    </button>
+
+      {/* Right side: symbol → LED → vote button */}
+      <div className="flex items-center gap-2 shrink-0">
+        <div className="w-9 h-9 rounded-md overflow-hidden border border-[#ccc6b4] bg-white flex items-center justify-center shrink-0">
+          {candidate.symbol_url
+            ? <SymbolImage src={candidate.symbol_url} name={candidate.name} />
+            : <SymbolPlaceholder />
+          }
+        </div>
+        <div className="w-2 h-2 rounded-full bg-gray-400 border border-gray-500 shrink-0" />
+        <button
+          onClick={() => onVote(candidate)}
+          className="w-14 h-6 rounded-full bg-[#1a4fa8] text-white text-[10px] font-medium tracking-wide hover:bg-[#2060c0] active:bg-[#0f3070] active:translate-y-px transition-all cursor-pointer shrink-0"
+        >
+          VOTE
+        </button>
+      </div>
+    </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Image helpers with error fallback
+// Image helpers
 // ─────────────────────────────────────────────────────────────────
 
 function CandidatePhoto({ src, name }: { src: string; name: string }) {
@@ -273,27 +344,15 @@ function SymbolImage({ src, name }: { src: string; name: string }) {
   if (errored) return <SymbolPlaceholder />;
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt={`${name} symbol`}
-      className="w-full h-full object-contain p-1"
-      onError={() => setErrored(true)}
-    />
+    <img src={src} alt={`${name} symbol`} className="w-full h-full object-contain p-1" onError={() => setErrored(true)} />
   );
 }
 
 function AvatarPlaceholder({ name }: { name: string }) {
-  const initials = name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
+  const initials = name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
   return (
-    <div className="w-full h-full flex items-center justify-center bg-green-50">
-      <span className="w-14 h-14 rounded-full bg-green-700 flex items-center justify-center text-white font-bold text-xl">
-        {initials}
-      </span>
+    <div className="w-full h-full flex items-center justify-center bg-green-700">
+      <span className="text-white font-bold text-base">{initials}</span>
     </div>
   );
 }
@@ -301,7 +360,7 @@ function AvatarPlaceholder({ name }: { name: string }) {
 function SymbolPlaceholder() {
   return (
     <div className="w-full h-full flex items-center justify-center bg-gray-100">
-      <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
           d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
       </svg>
@@ -326,9 +385,7 @@ function SuccessScreen() {
   return (
     <div className="fixed inset-0 bg-green-700 flex flex-col items-center justify-center gap-5">
       <span className="text-8xl select-none">🎉</span>
-      <h2 className="text-4xl font-extrabold text-white text-center px-6">
-        Thank you for voting!
-      </h2>
+      <h2 className="text-4xl font-extrabold text-white text-center px-6">Thank you for voting!</h2>
       <p className="text-green-200 text-lg">Your vote has been recorded.</p>
     </div>
   );
@@ -372,10 +429,6 @@ function ErrorScreen({
     </div>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────
-// Spinner
-// ─────────────────────────────────────────────────────────────────
 
 function Spinner({ className = '' }: { className?: string }) {
   return <div className={`rounded-full animate-spin ${className}`} />;

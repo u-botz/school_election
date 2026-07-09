@@ -14,6 +14,7 @@ export default function ResultsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState<Session | null>(null);
+  const [unpublishing, setUnpublishing] = useState<Session | null>(null);
 
   const loadData = useCallback(async () => {
     const [lpRes, upRes, settingsRes] = await Promise.all([
@@ -71,6 +72,24 @@ export default function ResultsPage() {
     if (!error) void loadData();
   };
 
+  const handleUnpublish = async (sess: Session) => {
+    if (!settings) return;
+    setUnpublishing(sess);
+
+    const update =
+      sess === 'lp'
+        ? { lp_published: false, lp_winner_id: null }
+        : { up_published: false, up_winner_id: null };
+
+    const { error } = await supabase
+      .from('settings')
+      .update(update)
+      .eq('id', settings.id);
+
+    setUnpublishing(null);
+    if (!error) void loadData();
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-400">
@@ -119,7 +138,9 @@ export default function ResultsPage() {
           candidates={lpCandidates}
           settings={settings}
           publishing={publishing}
+          unpublishing={unpublishing}
           onPublish={(s) => void handlePublish(s)}
+          onUnpublish={(s) => void handleUnpublish(s)}
         />
         <LeaderboardSection
           session="up"
@@ -128,7 +149,9 @@ export default function ResultsPage() {
           candidates={upCandidates}
           settings={settings}
           publishing={publishing}
+          unpublishing={unpublishing}
           onPublish={(s) => void handlePublish(s)}
+          onUnpublish={(s) => void handleUnpublish(s)}
         />
       </div>
     </div>
@@ -146,7 +169,9 @@ function LeaderboardSection({
   candidates,
   settings,
   publishing,
+  unpublishing,
   onPublish,
+  onUnpublish,
 }: {
   session: Session;
   label: string;
@@ -154,7 +179,9 @@ function LeaderboardSection({
   candidates: Candidate[];
   settings: Settings | null;
   publishing: Session | null;
+  unpublishing: Session | null;
   onPublish: (s: Session) => void;
+  onUnpublish: (s: Session) => void;
 }) {
   const isPublished =
     session === 'lp' ? settings?.lp_published : settings?.up_published;
@@ -197,7 +224,13 @@ function LeaderboardSection({
               </svg>
               Published ✓
             </span>
-            <span className="text-gray-400 text-xs">Winner announced on public screen</span>
+            <button
+              onClick={() => onUnpublish(session)}
+              disabled={!!unpublishing}
+              className="px-4 py-2 border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+            >
+              {unpublishing === session ? 'Unpublishing…' : 'Unpublish'}
+            </button>
           </>
         ) : (
           <>
