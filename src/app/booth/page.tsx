@@ -45,7 +45,7 @@ export default function BoothPage() {
       try {
         const [result] = await Promise.all([
           supabase.rpc('increment_vote', { candidate_id: candidate.id }),
-          new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+          new Promise<void>((resolve) => setTimeout(resolve, 1000)),
         ]);
         if (result.error) throw new Error(result.error.message);
         playSuccessBeep();
