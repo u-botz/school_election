@@ -63,7 +63,7 @@ export default function BoothPage() {
         setTimeout(async () => {
           await loadCandidates(session!);
           setStage('voting');
-        }, 2000);
+        }, 1000);
       } catch (err) {
         setVoteError(err instanceof Error ? err.message : 'An unknown error occurred.');
         setStage('error');
@@ -78,7 +78,7 @@ export default function BoothPage() {
       playSuccessBeep();
       setVoteCount((n) => n + 1);
       setStage('success');
-      setTimeout(() => setStage('voting'), 2000);
+      setTimeout(() => setStage('voting'), 1000);
     }, 1500);
   }, []);
 
