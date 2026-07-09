@@ -17,7 +17,12 @@ export default async function AdminLayout({
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <nav className="bg-green-700 text-white px-6 py-4 flex items-center justify-between shadow-md">
-        <span className="font-bold text-lg whitespace-nowrap">School Election Admin</span>
+        <a href="/" className="font-bold text-lg whitespace-nowrap hover:text-green-200 transition-colors flex items-center gap-2">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          School Election Admin
+        </a>
 
         <div className="flex items-center gap-6">
           <Link

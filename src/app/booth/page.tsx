@@ -37,6 +37,15 @@ export default function BoothPage() {
     void loadCandidates(sess);
   };
 
+  const goBackToSessionPick = () => {
+    setSession(null);
+    setCandidates([]);
+    setFetchError(null);
+    setVoteError(null);
+    setPendingCandidate(null);
+    setStage('session-pick');
+  };
+
   const castVote = useCallback(
     async (candidate: Candidate) => {
       setStage('loading');
@@ -95,6 +104,7 @@ export default function BoothPage() {
       voteCount={voteCount}
       onVote={castVote}
       onNota={castNota}
+      onBack={goBackToSessionPick}
       onRetryFetch={() => void loadCandidates(session!)}
     />
   );
@@ -106,7 +116,16 @@ export default function BoothPage() {
 
 function SessionPicker({ onSelect }: { onSelect: (s: Session) => void }) {
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-8 gap-10">
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-8 gap-10 relative">
+      <a
+        href="/"
+        className="absolute top-4 left-4 flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        Home
+      </a>
       <div className="text-center">
         <div className="mx-auto mb-5 w-16 h-16 rounded-full bg-green-700 flex items-center justify-center shadow-lg">
           <svg className="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -147,6 +166,7 @@ function VotingScreen({
   voteCount,
   onVote,
   onNota,
+  onBack,
   onRetryFetch,
 }: {
   session: Session;
@@ -156,6 +176,7 @@ function VotingScreen({
   voteCount: number;
   onVote: (c: Candidate) => void;
   onNota: () => void;
+  onBack: () => void;
   onRetryFetch: () => void;
 }) {
   const title = session === 'lp' ? 'Lower Primary Election' : 'Upper Primary Election';
@@ -163,6 +184,15 @@ function VotingScreen({
   return (
     <div className="min-h-screen bg-gray-300 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-2xl">
+        <button
+          onClick={onBack}
+          className="mb-3 flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors cursor-pointer"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Change Session
+        </button>
         {/* Machine outer frame */}
         <div className="bg-[#2a2f3b] rounded-2xl p-1">
           <div className="rounded-xl overflow-hidden border border-[#3a4050]">
