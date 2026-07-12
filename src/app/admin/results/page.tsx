@@ -15,6 +15,12 @@ export default function ResultsPage() {
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState<Session | null>(null);
   const [unpublishing, setUnpublishing] = useState<Session | null>(null);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetKey, setResetKey] = useState('');
+  const [resetKeyError, setResetKeyError] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
+
+  const RESET_KEY = '79071840';
 
   const loadData = useCallback(async () => {
     const [lpRes, upRes, settingsRes] = await Promise.all([
@@ -90,6 +96,36 @@ export default function ResultsPage() {
     if (!error) void loadData();
   };
 
+  const handleReset = async () => {
+    if (resetKey !== RESET_KEY) {
+      setResetKeyError('Incorrect key. Please try again.');
+      return;
+    }
+    setResetting(true);
+    setResetKeyError(null);
+
+    const [voteRes, settingsRes] = await Promise.all([
+      supabase.from('candidates').update({ vote_count: 0 }).gte('vote_count', 0),
+      supabase.from('settings').update({
+        lp_published: false,
+        up_published: false,
+        lp_winner_id: null,
+        up_winner_id: null,
+      }).eq('id', settings!.id),
+    ]);
+
+    setResetting(false);
+
+    if (voteRes.error ?? settingsRes.error) {
+      setResetKeyError('Reset failed. Check your database permissions.');
+      return;
+    }
+
+    setShowResetModal(false);
+    setResetKey('');
+    void loadData();
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-400">
@@ -154,6 +190,71 @@ export default function ResultsPage() {
           onUnpublish={(s) => void handleUnpublish(s)}
         />
       </div>
+
+      {/* Danger zone */}
+      <div className="mt-10 border border-red-200 rounded-2xl p-5 bg-red-50">
+        <p className="text-sm font-semibold text-red-700 mb-1">Danger zone</p>
+        <p className="text-xs text-red-500 mb-4">
+          Resets all vote counts to zero and clears published results. This cannot be undone.
+        </p>
+        <button
+          onClick={() => { setShowResetModal(true); setResetKey(''); setResetKeyError(null); }}
+          className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer"
+        >
+          Reset all election data
+        </button>
+      </div>
+
+      {/* Reset confirmation modal */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Reset all election data?</h2>
+                <p className="text-xs text-gray-500 mt-0.5">All votes and published results will be cleared.</p>
+              </div>
+            </div>
+
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Enter developer key to confirm
+            </label>
+            <input
+              type="password"
+              value={resetKey}
+              onChange={(e) => { setResetKey(e.target.value); setResetKeyError(null); }}
+              placeholder="8-digit key"
+              maxLength={8}
+              className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm tracking-widest"
+            />
+            {resetKeyError && (
+              <p className="text-red-500 text-xs mt-1.5">{resetKeyError}</p>
+            )}
+
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={() => { setShowResetModal(false); setResetKey(''); setResetKeyError(null); }}
+                className="flex-1 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm font-medium text-gray-700 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleReset()}
+                disabled={resetting || resetKey.length === 0}
+                className="flex-1 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-semibold transition-colors cursor-pointer"
+              >
+                {resetting ? 'Resetting…' : 'Reset'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
