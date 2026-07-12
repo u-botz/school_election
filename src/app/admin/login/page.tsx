@@ -1,14 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -23,7 +21,8 @@ export default function LoginPage() {
       });
 
       if (res.ok) {
-        router.push('/admin/candidates');
+        // Full page load so the server layout re-reads the auth cookie and shows the nav bar.
+        window.location.href = '/admin/candidates';
       } else {
         const data = (await res.json()) as { error?: string };
         setError(data.error ?? 'Login failed. Please try again.');
